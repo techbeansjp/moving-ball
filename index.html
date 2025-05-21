@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ウニョウニョ動く3D球体</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        .overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            text-shadow: 0 0 3px rgba(0,0,0,0.8);
+            pointer-events: none;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;">ウニョウニョ動く3D球体</h1>
+    <div class="overlay">DiverX風ウニョウニョ球体 サンプル</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    // DOMContentLoadedイベントで実行を保証
+    document.addEventListener('DOMContentLoaded', () => {
+        // マウス位置を追跡するための変数
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetMouseX = 0;
+        let targetMouseY = 0;
+        
+        // シーンの設定
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 0);
+        document.body.appendChild(renderer.domElement);
+
+        // 光源
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const pointLight = new THREE.PointLight(0xffffff, 1);
+        pointLight.position.set(5, 5, 5);
+        scene.add(pointLight);
+
+        // 変形するメッシュのための頂点を作成
+        const radius = 3;
+        const segments = 64;
+        const geometry = new THREE.IcosahedronGeometry(radius, 4);
+        
+        // オリジナルの頂点位置を保存
+        const originalPositions = [];
+        for (let i = 0; i < geometry.attributes.position.count; i++) {
+            originalPositions.push(
+                new THREE.Vector3(
+                    geometry.attributes.position.array[i * 3],
+                    geometry.attributes.position.array[i * 3 + 1],
+                    geometry.attributes.position.array[i * 3 + 2]
+                )
+            );
+        }
+
+        // マテリアル
+        const material = new THREE.MeshPhongMaterial({
+            color: 0x1a9dfb,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide,
+            specular: 0x4477ff,
+            shininess: 100
+        });
+
+        const sphere = new THREE.Mesh(geometry, material);
+        scene.add(sphere);
+
+        camera.position.z = 10;
+
+        // シーンをアニメーション
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // マウス位置をスムーズに追従
+            mouseX += (targetMouseX - mouseX) * 0.05;
+            mouseY += (targetMouseY - mouseY) * 0.05;
+            
+            const time = Date.now() * 0.001;
+            
+            // マウス位置に基づいて球体を変形
+            const mouseInfluenceX = mouseX * 0.001;
+            const mouseInfluenceY = mouseY * 0.001;
+            
+            // 頂点の位置を更新して変形させる
+            for (let i = 0; i < geometry.attributes.position.count; i++) {
+                const original = originalPositions[i];
+                
+                // 時間ベースのアニメーション
+                const noise1 = 0.3 * Math.sin(time + i * 0.1) * Math.sin(original.y + time * 0.5);
+                const noise2 = 0.3 * Math.cos(time * 0.7 + i * 0.05) * Math.sin(original.z + time * 0.3);
+                const noise3 = 0.2 * Math.sin(time * 0.9 + i * 0.08) * Math.cos(original.x + time * 0.6);
+                
+                // マウス位置に基づく追加の変形
+                const distX = original.x - mouseInfluenceX;
+                const distY = original.y - mouseInfluenceY;
+                const distance = Math.sqrt(distX * distX + distY * distY);
+                const mouseEffect = Math.max(0, 1 - distance) * 0.5;
+                
+                geometry.attributes.position.array[i * 3] = original.x + noise1 + distX * mouseEffect;
+                geometry.attributes.position.array[i * 3 + 1] = original.y + noise2 + distY * mouseEffect;
+                geometry.attributes.position.array[i * 3 + 2] = original.z + noise3 + mouseEffect;
+            }
+            
+            geometry.attributes.position.needsUpdate = true;
+            sphere.rotation.x += 0.002;
+            sphere.rotation.y += 0.003;
+            
+            renderer.render(scene, camera);
+        }
+
+        // 画面サイズ変更時にレンダラーサイズを更新
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // マウスの動きを追跡
+        document.addEventListener('mousemove', (event) => {
+            // ウィンドウの中心を原点とした座標系に変換
+            targetMouseX = (event.clientX - window.innerWidth / 2);
+            targetMouseY = (event.clientY - window.innerHeight / 2);
+            
+            // マウスの位置に基づいて光源も移動
+            pointLight.position.x = targetMouseX * 0.01;
+            pointLight.position.y = -targetMouseY * 0.01;
+        });
+        
+        // タッチデバイス対応
+        document.addEventListener('touchmove', (event) => {
+            if (event.touches.length > 0) {
+                event.preventDefault();
+                targetMouseX = (event.touches[0].clientX - window.innerWidth / 2);
+                targetMouseY = (event.touches[0].clientY - window.innerHeight / 2);
+                
+                // タッチ位置に基づいて光源も移動
+                pointLight.position.x = targetMouseX * 0.01;
+                pointLight.position.y = -targetMouseY * 0.01;
+            }
+        }, { passive: false });
+
+        animate();
+    });
+    </script>
+</body>
+</html>
